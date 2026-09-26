@@ -19,7 +19,7 @@ class TraceTests(unittest.IsolatedAsyncioTestCase):
                        max_tokens=64, max_turns=3, no_think=False, stats=False,
                        trace_dir=None, no_trace=False, test_command=None, test_timeout=120)
         options.update(overrides)
-        with patch("harness.cli.Ollama", return_value=provider), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+        with patch("harness.session.Ollama", return_value=provider), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             await chat(argparse.Namespace(**options))
 
     def rows(self, root):

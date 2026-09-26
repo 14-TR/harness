@@ -66,7 +66,7 @@ class TraceRecorder:
         status = "completed"
         try:
             if error is not None:
-                status = "cancelled" if isinstance(error, (asyncio.CancelledError, KeyboardInterrupt)) else "failed"
+                status = "cancelled" if isinstance(error, (asyncio.CancelledError, KeyboardInterrupt, GeneratorExit)) else "failed"
                 self.record("error", {"type": type(error).__name__, "message": str(error)})
             self.record("run_end", {"status": status})
         except Exception:

@@ -39,16 +39,25 @@ async def run(
         # Assemble a complete assistant message while also streaming its text.
         # We need the complete version to replay the conversation next turn.
         reply = Message("assistant")
-        async for delta in provider.stream(messages, schemas):
-            reply.content += delta.text
-            reply.thinking += delta.thinking
-            reply.calls.extend(delta.calls)
-            # Events keep this loop independent of print(), a web UI, or logs.
-            # A slow consumer delays the next chunk: this is backpressure.
-            if delta.text:
-                yield Event("text", delta.text)
-            if delta.thinking:
-                yield Event("thinking", delta.thinking)
+        stream = provider.stream(messages, schemas)
+        try:
+            async for delta in stream:
+                reply.content += delta.text
+                reply.thinking += delta.thinking
+                reply.calls.extend(delta.calls)
+                # Events keep this loop independent of print(), a web UI, or logs.
+                # A slow consumer delays the next chunk: this is backpressure.
+                if delta.text:
+                    yield Event("text", delta.text)
+                if delta.thinking:
+                    yield Event("thinking", delta.thinking)
+        finally:
+            # Closing a suspended run must release the provider's response now,
+            # even when the consumer stops between chunks. Ordinary async
+            # iterators need not expose the async-generator aclose() method.
+            close = getattr(stream, "aclose", None)
+            if close is not None:
+                await close()
         # No tool requests means the model has finished this run. "done" repeats
         # the full answer for consumers that want it; a streaming UI should not
         # print it again after already printing the individual "text" events.

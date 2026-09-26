@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 
@@ -64,7 +64,7 @@ class CLIToolsTests(unittest.IsolatedAsyncioTestCase):
                 no_think=False, stats=True, trace_dir=None, no_trace=False,
                 test_command=[sys.executable, "check.py"], test_timeout=5)
             output = io.StringIO()
-            with patch("harness.cli.Ollama", return_value=Provider()), patch("harness.cli.httpx.AsyncClient", side_effect=client), \
+            with patch("harness.session.Ollama", return_value=Provider()), patch("harness.session.httpx.AsyncClient", side_effect=client), \
                     redirect_stdout(output), redirect_stderr(io.StringIO()):
                 await chat(args)
             self.assertEqual(output.getvalue(), "Updated and verified.\n")
@@ -87,3 +87,30 @@ class CLIToolsTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(SystemExit) as raised:
                     main()
                 self.assertEqual(raised.exception.code, 2)
+
+
+class CLIModeTests(unittest.TestCase):
+    def test_no_prompt_or_explicit_flag_launches_tui(self):
+        for argv, prompt in ((["harness"], None), (["harness", "--tui", "hello"], "hello")):
+            with self.subTest(argv=argv), patch.object(sys, "argv", argv), \
+                    patch("sys.stdin.isatty", return_value=True), patch("sys.stdout.isatty", return_value=True), \
+                    patch("harness.cli.interactive", new_callable=AsyncMock) as interactive:
+                main()
+                interactive.assert_awaited_once()
+                self.assertEqual(interactive.call_args.args[0].prompt, prompt)
+
+    def test_quoted_prompt_keeps_one_shot_mode_without_tty(self):
+        with patch.object(sys, "argv", ["harness", "hello"]), \
+                patch("sys.stdin.isatty", return_value=False), patch("sys.stdout.isatty", return_value=False), \
+                patch("harness.cli.chat", new_callable=AsyncMock) as chat:
+            main()
+            chat.assert_awaited_once()
+            self.assertEqual(chat.call_args.args[0].prompt, "hello")
+
+    def test_interactive_mode_requires_terminal(self):
+        with patch.object(sys, "argv", ["harness"]), patch("sys.stdin.isatty", return_value=False), \
+                redirect_stderr(io.StringIO()) as error:
+            with self.assertRaises(SystemExit) as raised:
+                main()
+            self.assertEqual(raised.exception.code, 2)
+            self.assertIn("pass a quoted prompt", error.getvalue())

@@ -1,7 +1,7 @@
 # Qwen harness
 
 A small async Python agent harness for local Ollama. One runtime dependency
-(`httpx`), one CLI entry point, no script directory, and no agent framework.
+(`httpx`), a terminal chat UI, one CLI entry point, and no agent framework.
 Defaults to the `qwen2.5:7b` model.
 
 ## Run
@@ -13,10 +13,14 @@ From the repository directory (Python 3.9+), with Ollama running and
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e .
-.venv/bin/harness "Hello" --stats
+.venv/bin/harness
 ```
 
-Once installed:
+Running `harness` without a prompt opens the full-screen TUI on macOS/Linux
+using Python's built-in `curses`. It keeps the conversation in memory, streams
+responses, and shows tool activity while you work.
+
+For a single prompt, including use in scripts or pipes:
 
 ```sh
 .venv/bin/harness "Read README.md and explain this project in two sentences" --stats
@@ -26,6 +30,40 @@ Choose another installed model with `--model NAME`, another server with
 `--host http://localhost:11434`, or a workspace with `--root PATH`.
 `OLLAMA_MODEL` and `OLLAMA_HOST` provide the same defaults.
 Use `--no-think` only with a model that supports the thinking option.
+
+## Terminal chat
+
+```sh
+.venv/bin/harness
+.venv/bin/harness --root /path/to/project --max-turns 16
+.venv/bin/harness --tui "Explore this project"
+```
+
+The screen has a conversation pane, a multiline composer, and a status bar.
+Tool calls appear alongside responses; expand their details to inspect arguments
+and results. You can type a follow-up while a response streams and send it once
+the current response finishes.
+
+| Key or command | Action |
+| --- | --- |
+| Enter | Send the current prompt |
+| Ctrl-J | Insert a newline |
+| Left / Right / Home / End | Edit the prompt |
+| Up / Down | Recall previous prompts |
+| Page Up / Page Down | Scroll the conversation |
+| Ctrl-T or F2 | Toggle tool details |
+| Ctrl-C | Cancel the response, or clear the composer when idle |
+| Ctrl-D or `/quit` | Exit |
+| `/new` | Start a fresh conversation without changing files or saved notes |
+| `/help` | Show help |
+| `/trace` | Show the latest trace path |
+
+The TUI requires an interactive terminal. Errors stay in the conversation so you
+can correct the issue and try again. Cancelling stops the active response; it
+does not undo edits or tools that already completed. Each submitted prompt gets
+its own trace. Closing the TUI ends the in-memory conversation; chat resumption
+and automatic context trimming are not implemented. Use `/new` for a fresh
+context and saved notes for decisions you want to retain across launches.
 
 ## Read in this order
 
@@ -39,12 +77,14 @@ Use `--no-think` only with a model that supports the thinking option.
 | `harness/commands.py` | Configured tests and read-only Git views |
 | `harness/web.py` | Bounded HTTP text retrieval |
 | `harness/notes.py` | Small persistent project notes |
-| `harness/cli.py` | Wires everything together and prints events |
+| `harness/session.py` | Shared clients, tool registry, conversation history, and per-prompt traces |
+| `harness/cli.py` | Selects TUI or one-shot mode and prints one-shot events |
+| `harness/tui.py` | Terminal layout, input, scrolling, and live response display |
 | `harness/tracing.py` | Saves timestamped run events as JSONL |
 
 State is a normal list of messages owned by the caller. The runner appends
 completed turns. Reuse that list for a conversation, or save it outside the loop.
-The CLI intentionally handles one prompt per invocation.
+The TUI reuses that history for follow-up prompts; one-shot mode starts fresh.
 
 ## Built-in tools
 
@@ -116,8 +156,9 @@ Notes and traces are plaintext; avoid storing credentials in them.
 
 ## Agent traces
 
-Every CLI run saves a separate `.traces/<run-id>.jsonl` file under the selected
-workspace (`--root`, or the current directory). The path is printed to stderr.
+Every submitted prompt saves a separate `.traces/<run-id>.jsonl` file under the
+selected workspace (`--root`, or the current directory). One-shot mode prints the
+path to stderr; the TUI exposes it through `/trace`.
 Each line is a JSON object with a run ID, sequence number, UTC timestamp,
 elapsed seconds, event kind, and event data.
 
@@ -136,9 +177,10 @@ These are local plaintext files containing prompts and any file contents returne
 by tools. The default `.traces/` directory and all `*.jsonl` trace files are
 ignored by Git, including traces saved in custom directories. Review and redact
 traces before sharing them in issues or elsewhere. Nothing is uploaded by the
-recorder. Recording uses small synchronous, line-buffered writes in the
-CLI consumer; the runner stays independent of storage. Trace I/O failures stop
-the CLI rather than silently running without a trace.
+recorder. Recording uses small synchronous, line-buffered writes in the shared
+session; the runner stays independent of storage. Trace I/O failures stop the
+current run rather than silently continuing without a trace. The TUI displays
+the error and remains available for another prompt.
 
 Event times reflect when the consumer receives them. `tool_start` means queued,
 and tool results arrive after the batch finishes, so these timestamps are not
@@ -202,8 +244,8 @@ Automatic retries are intentionally absent because tools may have side effects.
 
 This is a learning harness, not an OS sandbox. Filesystem containment checks do
 not protect against another local process changing symlinks during an operation.
-It has no arbitrary shell tool, automatic context compaction, persistent chat
-sessions, or plugins. Saved notes provide explicit memory across CLI runs.
+It has no arbitrary shell tool, automatic context compaction, saved chat sessions,
+or plugins. Saved notes provide explicit memory across CLI runs.
 
 Protocol references: [Ollama streaming tool calls](https://docs.ollama.com/capabilities/tool-calling)
 and [chat API](https://docs.ollama.com/api/chat).
@@ -216,3 +258,5 @@ and [chat API](https://docs.ollama.com/api/chat).
 
 Tests use temporary workspaces, subprocesses, fake providers, and HTTP transports.
 They do not need a model or network access; Git cases skip if Git is unavailable.
+TUI tests also exercise keyboard input, streaming, cancellation, and terminal
+cleanup in a pseudo-terminal on supported systems.

@@ -39,6 +39,29 @@ class ScriptedProvider:
 class HarnessTests(unittest.IsolatedAsyncioTestCase):
     # unittest supplies a fresh event loop for each async test, keeping tasks
     # from one case from leaking into another. No extra test library required.
+    async def test_provider_can_return_plain_async_iterator(self):
+        class Chunks:
+            def __init__(self):
+                self.chunks = iter([Delta(text="hello"), Delta(text=" world")])
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                try:
+                    return next(self.chunks)
+                except StopIteration:
+                    raise StopAsyncIteration
+
+        class Provider:
+            def stream(self, messages, tools):
+                return Chunks()
+
+        history = [Message("user", "test")]
+        events = [event async for event in run(Provider(), history, {})]
+        self.assertEqual(events[-1].kind, "done")
+        self.assertEqual(history[-1], Message("assistant", "hello world"))
+
     async def test_tool_round_trip_and_streaming(self):
         async def add(a, b):
             return str(a + b)
