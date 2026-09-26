@@ -1,0 +1,35 @@
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Runs contain prompts, file contents, and potentially sensitive data.
+.traces/
+*.jsonl
+*.log
+
+# Local credentials and private keys
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+secrets.yaml
+secrets.yml
+secrets.toml
+
+# Local OS/editor files
+.DS_Store
+.idea/
