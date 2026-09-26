@@ -14,6 +14,7 @@ htmlcov/
 
 # Runs contain prompts, file contents, and potentially sensitive data.
 .traces/
+.harness/
 *.jsonl
 *.log
 

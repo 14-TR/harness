@@ -64,7 +64,16 @@ async def run(
             # gather overlaps async I/O and returns results in INPUT order,
             # even when later calls finish sooner. It does not make CPU-bound
             # Python code parallel. Only enable this for independent tools.
-            results = await asyncio.gather(*(invoke(call, tools) for call in reply.calls))
+            tasks = [asyncio.create_task(invoke(call, tools)) for call in reply.calls]
+            try:
+                results = await asyncio.gather(*tasks)
+            finally:
+                # A tool can cancel itself; gather alone would leave siblings
+                # running. Finish cleanup before exposing cancellation upstream.
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
         else:
             # Awaiting inside this comprehension preserves execution order.
             # This matters if a future tool writes a file another tool reads.

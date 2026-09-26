@@ -142,6 +142,30 @@ class HarnessTests(unittest.IsolatedAsyncioTestCase):
             result = await invoke(Call("read_file", {"path": "../outside"}), tools)
             self.assertIn("inside the workspace", result)
 
+    async def test_self_cancelling_tool_cleans_up_parallel_siblings(self):
+        started = asyncio.Event()
+        stopped = asyncio.Event()
+
+        async def sibling():
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                stopped.set()
+
+        async def cancel_self():
+            await started.wait()
+            raise asyncio.CancelledError()
+
+        provider = ScriptedProvider([[Delta(calls=[Call("sibling", {}), Call("cancel", {})])]])
+        history = [Message("user", "test")]
+        tools = {"sibling": Tool("", {}, sibling), "cancel": Tool("", {}, cancel_self)}
+        with self.assertRaises(asyncio.CancelledError):
+            async for _ in run(provider, history, tools, parallel_tools=True):
+                pass
+        self.assertTrue(stopped.is_set())
+        self.assertEqual(len(history), 1)
+
     async def test_ollama_wire_format_and_incomplete_stream(self):
         requests = []
 

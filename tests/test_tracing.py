@@ -17,7 +17,7 @@ class TraceTests(unittest.IsolatedAsyncioTestCase):
     async def exercise(self, root, provider, **overrides):
         options = dict(root=root, prompt="Read sample.txt", model="fake", host="http://localhost:11434",
                        max_tokens=64, max_turns=3, no_think=False, stats=False,
-                       trace_dir=None, no_trace=False)
+                       trace_dir=None, no_trace=False, test_command=None, test_timeout=120)
         options.update(overrides)
         with patch("harness.cli.Ollama", return_value=provider), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             await chat(argparse.Namespace(**options))
