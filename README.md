@@ -250,6 +250,28 @@ or plugins. Saved notes provide explicit memory across CLI runs.
 Protocol references: [Ollama streaming tool calls](https://docs.ollama.com/capabilities/tool-calling)
 and [chat API](https://docs.ollama.com/api/chat).
 
+## Daily agentic-system-engineering research
+
+`harness-research` adds a separate, research-only arXiv → local Qwen pipeline.
+It selects five relevant unread papers, pins versions, saves original/extracted
+sources and a SQLite ledger, validates cited structured analyses, and produces
+per-paper reports plus a history-aware daily synthesis. Shortfalls, failures,
+backlog and truncated reading coverage remain explicit. Optional curated
+Obsidian export and **generate-only** launchd setup are included; no scheduler
+is enabled by installation.
+
+```sh
+.venv/bin/python -m pip install -e '.[research]'  # optional PDF fallback
+.venv/bin/harness-research search
+.venv/bin/harness-research run
+.venv/bin/harness-research status
+```
+
+See [research setup, limits, provenance and scheduling](research/README.md).
+The research model receives no file-edit, shell, or general chat tools; reports
+are model interpretations, not independently replicated findings. Existing
+chat/TUI behavior is unchanged.
+
 ## Verify
 
 ```sh

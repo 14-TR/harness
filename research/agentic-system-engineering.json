@@ -1,0 +1,21 @@
+{
+  "topic": "agentic-system-engineering",
+  "data_dir": ".harness/research",
+  "query": "(ti:agent OR ti:agentic) AND (cat:cs.AI OR cat:cs.CL OR cat:cs.SE OR cat:cs.CR)",
+  "count": 5,
+  "fresh_days": 30,
+  "search_limit": 80,
+  "search_pages": 3,
+  "model": "qwen2.5:7b",
+  "host": "http://127.0.0.1:11434",
+  "context_chars": 22000,
+  "model_context": 12288,
+  "max_tokens": 2000,
+  "max_model_calls": 14,
+  "model_timeout": 180,
+  "runtime_seconds": 1800,
+  "download_bytes": 20971520,
+  "total_download_bytes": 104857600,
+  "history_count": 10,
+  "obsidian_dir": ""
+}
