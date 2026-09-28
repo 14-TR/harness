@@ -216,6 +216,15 @@ Add annotations to other project notes. Local verification does not establish
 arrival on an iPhone. It never changes `.obsidian`, core project notes or paused
 conversation/bookmark jobs.
 
+## Optional independent public research delivery
+
+See [PUBLICATION.md](PUBLICATION.md) for the disabled-by-default, exact-target
+GitHub research publisher, private preview command, content policy and setup.
+It has a separate durable queue and can deliver completed research even when
+Obsidian is inaccessible. Research idempotency remains unchanged; an opted-in
+public delivery retry may still perform bounded metadata/Git network I/O.
+No schedule or private configuration is enabled automatically.
+
 ## Daily launchd schedule (generate, review, then explicitly activate)
 
 Default **08:15 in the Mac's current local timezone**. launchd handles calendar

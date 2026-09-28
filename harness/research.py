@@ -24,6 +24,7 @@ import httpx
 
 from .research_sources import Arxiv, DEFAULT_QUERY, TOPICS, parse_atom, select_papers, extract_html, excerpts
 from .research_analysis import ResearchModel, KEYS
+from . import research_public
 
 DELIVERY_DRAIN_LIMIT = 7
 
@@ -50,6 +51,8 @@ class Config:
     total_download_bytes: int = 100 * 1024 * 1024
     history_count: int = 10
     obsidian_dir: str = ''
+    public_repository: str = ''
+    public_staging_dir: str = ''
 
     def validate(self):
         limits = {'count': (1, 10), 'fresh_days': (1, 365), 'search_limit': (5, 100), 'search_pages': (1, 5),
@@ -70,6 +73,7 @@ class Config:
             raise ValueError('Invalid topic terms')
         if self.topic != 'agentic-system-engineering':
             raise ValueError('This configuration supports agentic-system-engineering')
+        research_public.validate_config(self)
         return self
 
 
@@ -468,10 +472,15 @@ async def run(config, *, day=None, retry=False, web_client=None, model_client=No
                 fetch = Arxiv(web, interval=interval, max_bytes=config.download_bytes, total_bytes=config.total_download_bytes, resolver=resolver)
                 model = ResearchModel(local, config.model, max_calls=config.max_model_calls, max_tokens=config.max_tokens,
                                       context=config.model_context, timeout=config.model_timeout)
-                signature = digest(encode(asdict(config)).encode())
+                # Delivery opt-in is independent of frozen research/model settings.
+                research_config = {k: v for k, v in asdict(config).items() if not k.startswith('public_')}
+                signature = digest(encode(research_config).encode())
                 state = store.load(day)
                 if state and state['config_sha256'] != signature:
                     raise ValueError('Configuration changed for existing day; use its original config or a separate state directory')
+                public_attempted = set()
+                public_deliveries = await research_public.sync(store, config, attempted=public_attempted,
+                                                               client=web, resolver=resolver)
                 if state:
                     # Preflight before any network/model work or checkpoint writes.
                     verify_completed(state)
@@ -482,11 +491,11 @@ async def run(config, *, day=None, retry=False, web_client=None, model_client=No
                     # A crash can occur on either side of the external write.
                     # Retry exactly the queued bytes, not a freshly rendered digest.
                     deliver(store, state)
-                    return dict(state, idempotent=True, pending_deliveries=store.pending_deliveries())
+                    return dict(state, idempotent=True, pending_deliveries=store.pending_deliveries(), public_deliveries=public_deliveries)
                 if state and state['status'] == 'complete':
                     # A true no-op: verify, but do not redownload/rewrite outputs.
                     verify_artifacts(state)
-                    return dict(state, idempotent=True, pending_deliveries=pending)
+                    return dict(state, idempotent=True, pending_deliveries=pending, public_deliveries=public_deliveries)
                 if not state:
                     state = {'day': day, 'config_sha256': signature, 'config': asdict(config), 'created_at': stamp(), 'status': 'running',
                              'target': config.count, 'items': [], 'selected': False, 'history': [], 'warnings': [], 'metrics': {}, 'attempts': []}
@@ -583,9 +592,13 @@ async def run(config, *, day=None, retry=False, web_client=None, model_client=No
                     if config.obsidian_dir:
                         state['delivery'] = dict(state.get('delivery', {}), status='pending')
                     store.save(state)
+                    # Public delivery must run before any vault access, including
+                    # an export error. Its outbox never consumes daily.md.
+                    public_deliveries = await research_public.sync(store, config, attempted=public_attempted,
+                                                                   client=web, resolver=resolver)
                     if config.obsidian_dir:
                         deliver(store, state)
-                return state
+                return dict(state, public_deliveries=public_deliveries)
         finally:
             store.db.close()
 
@@ -657,6 +670,11 @@ def main():
     for name in ('run', 'retry', 'status'):
         sub = commands.add_parser(name)
         sub.add_argument('--date', help='ISO local calendar day; default today (status lists recent runs)')
+    commands.add_parser('public-status', help='Read public outbox status only')
+    commands.add_parser('public-retry', help='Publish completed research only; requires explicit public opt-in')
+    sub = commands.add_parser('public-prepare', help='Build private sanitized previews; never publish or enqueue')
+    sub.add_argument('--output', required=True, type=Path)
+    sub.add_argument('--date', help='Optional ISO date; otherwise all historical eligible runs')
     sub = commands.add_parser('launchd', help='Generate only; never install or activate')
     sub.add_argument('--output', required=True, type=Path)
     sub.add_argument('--hour', type=int, default=8)
@@ -664,7 +682,13 @@ def main():
     args = parser.parse_args()
     try:
         config = load_config(args.config)
-        if args.command == 'status':
+        if args.command == 'public-status':
+            result = research_public.delivery_status(config)
+        elif args.command == 'public-prepare':
+            result = asyncio.run(research_public.prepare(config, args.output, day=args.date))
+        elif args.command == 'public-retry':
+            result = asyncio.run(research_public.retry(config))
+        elif args.command == 'status':
             result = status(config, args.date)
         elif args.command == 'search':
             result = asyncio.run(search(config))
@@ -675,11 +699,18 @@ def main():
                 raise ValueError('No existing run to retry for this day')
             result = asyncio.run(run(config, day=args.date, retry=args.command == 'retry'))
         print(encode(result))
-        if args.command in ('run', 'retry') and isinstance(result, dict) and (result['status'] != 'complete' or result.get('pending_deliveries')):
+        if args.command == 'public-prepare' and isinstance(result, dict) and result['failed']:
+            raise SystemExit(2)
+        if args.command == 'public-retry' and isinstance(result, list) and any(d['status'] == 'pending' for d in result):
+            raise SystemExit(2)
+        if args.command in ('run', 'retry') and isinstance(result, dict) and (result['status'] != 'complete' or result.get('pending_deliveries')
+                or any(d['status'] == 'pending' for d in result.get('public_deliveries', []))):
             raise SystemExit(2)
     except KeyboardInterrupt:
         raise SystemExit(130)
     except (ValueError, RuntimeError, OSError, httpx.HTTPError, sqlite3.Error) as exc:
+        if args.command.startswith('public-'):
+            parser.exit(1, 'Error: public_command_failed\n')
         parser.exit(1, 'Error: ' + str(exc) + '\n')
 
 
