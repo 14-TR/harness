@@ -11,7 +11,7 @@ import time
 # Imported by research_public only after its boundary definitions are available.
 from .research_public import PublicError, TARGET, checked_day, render_document, validate_artifact
 
-README = b'''# Agentic research
+LEGACY_README = b'''# Agentic research
 
 Automated research digests of public arXiv papers, organized by calendar date.
 Reports contain model-generated interpretation and unexecuted experiment proposals.
@@ -21,6 +21,11 @@ Public titles and pinned identifiers are checked against arXiv metadata. The
 conservative publication vocabulary can withhold entire model statements.
 No source quotations, raw downloads, provider receipts or private reports belong here.
 '''
+README = LEGACY_README.replace(
+    b'conservative publication vocabulary can withhold entire model statements.',
+    b'privacy checks redact identifiable private spans, not scientific vocabulary.').replace(
+    b'No source quotations, raw downloads, provider receipts or private reports belong here.',
+    b'Quotation fields, raw downloads, provider receipts and private reports are not exported.\nModel summaries may repeat public source language; privacy heuristics are not a secrecy guarantee.')
 GIT_CONFIG = b'[core]\nrepositoryformatversion = 0\nbare = false\nfilemode = true\nlogallrefupdates = false\n'
 IDENTITY = 'TR Ingram <14-TR@users.noreply.github.com>'
 
@@ -179,7 +184,7 @@ class GitPublisher:
                     or name not in allowed or name in found or not re.fullmatch('[a-f0-9]{40}', sha)):
                 raise PublicError('unsafe_public_git_tree')
             blob = self._git('cat-file', 'blob', sha)[1]
-            if blob != allowed[name]:
+            if blob not in ((allowed[name],) if isinstance(allowed[name], bytes) else allowed[name]):
                 raise PublicError('public_git_content_mismatch')
             found.add(name)
         return found
@@ -199,7 +204,7 @@ class GitPublisher:
             name = str(path.relative_to(self.repo))
             if name not in permitted or name not in allowed:
                 raise PublicError('unexpected_public_staging_file')
-            if regular_bytes(path) != allowed[name]:
+            if regular_bytes(path) not in ((allowed[name],) if isinstance(allowed[name], bytes) else allowed[name]):
                 raise PublicError('public_staged_content_mismatch')
             found.add(name)
         return found
@@ -215,18 +220,18 @@ class GitPublisher:
             body = self._git('cat-file', 'commit', commit)[1].decode('ascii')
             headers, message = body.split('\n\n', 1)
             lines = headers.splitlines()
-            if (not re.fullmatch(r'Publish research \d{4}-\d{2}-\d{2}\n', message)
+            if (not re.fullmatch(r'(?:Publish|Correct) research \d{4}-\d{2}-\d{2}\n', message)
                     or not re.fullmatch(r'tree [a-f0-9]{40}', lines[0])
                     or sum(line.startswith('parent ') for line in lines) > 1):
                 raise PublicError('unsafe_public_commit')
-            checked_day(message[len('Publish research '):].strip())
+            checked_day(message.split()[-1])
             for line in lines[1:]:
                 if not (re.fullmatch(r'parent [a-f0-9]{40}', line)
                         or re.fullmatch(r'(author|committer) ' + re.escape(IDENTITY) + r' [0-9]+ \+0000', line)):
                     raise PublicError('unsafe_public_commit')
             self._tree(commit, allowed)
 
-    def publish(self, day, documents):
+    def publish(self, day, documents, *, previous=None):
         from .research import atomic, locked
         checked_day(day)
         if day not in documents or len(documents) > 3660:
@@ -238,6 +243,13 @@ class GitPublisher:
             data = render_document(document)
             validate_artifact(data, document)
             allowed['reports/' + key + '.md'] = data
+        # Only a hash-verified prior document supplied by the private ledger may
+        # differ at the target path. Arbitrary remote bytes are never adopted.
+        accepted = dict(allowed, **{'README.md': (LEGACY_README, README)})
+        if previous is not None:
+            if previous['day'] != day:
+                raise PublicError('invalid_public_revision')
+            accepted['reports/' + day + '.md'] = (render_document(previous), allowed['reports/' + day + '.md'])
         self.deadline = time.monotonic() + 120
         with locked(self.root):
             self._initialize()
@@ -247,23 +259,23 @@ class GitPublisher:
                 self._git('fetch', '--quiet', '--no-tags', self._remote(), 'refs/heads/main')
                 if self._text('rev-parse', 'FETCH_HEAD') != remote:
                     raise PublicError('public_remote_changed')
-                self._tree(remote, allowed)
+                self._tree(remote, accepted)
                 if head and self._git('merge-base', '--is-ancestor', remote, head, allow_failure=True)[0]:
                     raise PublicError('public_remote_diverged')
             if not head and remote:
                 # A new staging repo may recover only from already known safe bytes.
-                if self._worktree(allowed, set()):
+                if self._worktree(accepted, set()):
                     raise PublicError('unexpected_public_staging_file')
                 self._git('read-tree', remote)
-                self._tree('', allowed, index=True)
+                self._tree('', accepted, index=True)
                 self._git('checkout-index', '-a')
                 self._git('update-ref', 'refs/heads/main', remote)
                 head = remote
-            prior = self._tree(head, allowed) if head else set()
+            prior = self._tree(head, accepted) if head else set()
             desired = 'reports/' + day + '.md'
             permitted = prior | {'README.md', desired}
-            self._worktree(allowed, permitted)
-            staged = self._tree('', allowed, index=True)
+            self._worktree(accepted, permitted)
+            staged = self._tree('', accepted, index=True)
             if staged - permitted:
                 raise PublicError('unexpected_public_index')
             atomic(self.repo / 'README.md', README)
@@ -273,9 +285,9 @@ class GitPublisher:
             if self._tree('', allowed, index=True) != work or work != permitted:
                 raise PublicError('public_index_mismatch')
             if not head or self._git('diff', '--cached', '--quiet', allow_failure=True)[0]:
-                self._git('commit', '--quiet', '--no-gpg-sign', '-m', 'Publish research ' + day)
+                self._git('commit', '--quiet', '--no-gpg-sign', '-m', ('Correct research ' if previous is not None else 'Publish research ') + day)
             head = self._head()
-            self._history(head, remote, allowed)
+            self._history(head, remote, accepted)
             self._check_git_metadata()
             if self._tree(head, allowed) != work or self._tree('', allowed, index=True) != work:
                 raise PublicError('public_index_mismatch')

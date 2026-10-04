@@ -28,6 +28,22 @@ class ResearchCLITests(unittest.TestCase):
             self.assertFalse(list((root / 'preview').rglob('.git')))
             self.assertFalse((root / 'state').exists())
 
+    def test_correction_cli_requires_two_explicit_hash_approvals(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            config = root / 'config.json'
+            config.write_text(json.dumps({'data_dir': str(root / 'state')}))
+            argv = [sys.executable, '-m', 'harness.research', '--config', str(config)]
+            result = subprocess.run(argv + ['public-revise', '--help'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn('--expected-payload-sha256', result.stdout)
+            self.assertIn('--expected-report-sha256', result.stdout)
+            attempt = subprocess.run(argv + ['public-revise', '--date', '2026-09-28',
+                '--expected-payload-sha256', 'a'*64, '--expected-report-sha256', 'b'*64], capture_output=True, text=True)
+            self.assertEqual(attempt.returncode, 1)
+            self.assertIn('public_command_failed', attempt.stderr)
+            self.assertFalse((root / 'state').exists())
+
     def test_status_and_launchd_generation_do_not_run_or_install(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp).resolve()

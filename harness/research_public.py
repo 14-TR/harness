@@ -1,8 +1,8 @@
 """Opt-in public research boundary. Never publish private reports or raw state.
 
-Only independently retrieved public titles/IDs and closed-vocabulary model
-statements cross this boundary. This is a deliberately lossy publication policy,
-not a claim that regex can identify every possible secret or personal statement.
+Only independently retrieved public titles/IDs and privacy-checked model
+statements cross this boundary. Unknown scientific vocabulary is not sensitive.
+Heuristics do not prove absence of every secret or personal statement.
 """
 from datetime import date
 import asyncio
@@ -22,146 +22,6 @@ from .research_sources import Arxiv, paper_id, parse_atom
 
 TARGET = 'https://github.com/14-TR/agentic-research.git'
 OMITTED = 'Statement withheld by the public content policy.'
-# Reviewed general research vocabulary, never automatically expanded from model
-# output, private state or downloaded source text. Public title terms are separate.
-# Unknown words suppress the whole field; never remove just a suspicious token.
-WORDS = frozenset('''a an the and or but if then than that this these those with without
-of for from to in on at by as is are was were be been being it its their they them
-has have had do does did not no none only all any each both same different more less
-most other some such may might can could should would will must also about across
-between within under over through after before into per one two three four five ten
-twenty first second next new small large larger smaller simple complex fixed bounded
-local public toy task tasks run runs example examples condition conditions compare
-compared comparing comparison comparator baseline baselines test tests testing trial
-trials budget count stop minutes change changes proposed proposal experiment experiments
-metric metrics measure measured measuring measurement evaluate evaluated evaluating
-evaluation evaluations benchmark benchmarks accuracy success failure failures rate rates
-latency cost costs time tokens token resource resources efficiency efficient overhead
-memory retrieval context agent agents agentic system systems model models language
-planning plan plans planner tool tools use uses using used call calls execution execute
-executed action actions step steps sequence sequences sequential parallel multi single
-multiagent orchestration workflow workflows architecture architectures design designs
-approach approaches method methods mechanism mechanisms framework frameworks pipeline
-pipelines process processes protocol protocols performance reliability reliable robust
-robustness recovery retry retries recover permission permissions sandbox security safety
-injection prompt prompts instruction instructions adversarial attack attacks defense
-defenses policy policies constraint constraints validation validate validated validating
-verification verified verify evidence reported reports report author authors claim claims
-result results support supports supported improve improves improved improvement reduce
-reduces reduced reduction increase increases increased effect effects impact tradeoff
-tradeoffs trade off benefit benefits limit limits limitation limitations limited suggests
-suggest suggestive demonstrates demonstrate distinguish attribution interpretation
-interpreted analysis analyses analyze summary synthesis connection connections learning
-training inference reasoning answer answers question questions query queries response
-responses input inputs output outputs feedback loop loops search selection selected
-select adaptive adapt dynamic static structured structure structures format schema
-state states checkpoint checkpoints durable persistence persistent storage cache cached
-caching history historical retrieval augmented generation generated generate document
-documents information relevant relevance knowledge retrieve retrieved retrieving embedding
-embeddings vector vectors semantic context window windows length long short sequence
-attention compression compress compressed compact sampling sample sampled samples coverage
-complete incomplete partial full incomplete missing available unavailable abstract
-objective objectives reward rewards optimization optimize optimized optimize optimal
-quality error errors correct incorrect correctness reproducible reproducibility replicate
-replicated replication independent independently empirical estimate estimates estimated
-statistical statistics significant significance random randomized deterministic controlled
-control controls variables variable ablation ablations component components module modules
-operation operations end endpoint observation observations observability tracing traces
-debugging diagnosis diagnostic monitor monitoring tracking track trace distribution
-distributions domain domains general generalization generalize generalizes generalizing
-transfer scale scaling scalable scalability capacity complexity diverse diversity data
-dataset datasets standard standards standardize standardized identical consistent
-consistency inconsistent comparison fair fairness balance balanced balancing allocation
-allocate allocations schedule scheduling scheduler routing route routes routed route
-delegation delegate delegated collaborative collaboration cooperation cooperative team
-teams role roles communication coordination coordinate centralized decentralized
-hierarchical hierarchy hierarchy iterative iteration iterations reflection reflective
-reflect self critic critique evaluate evaluator judge judges scoring score scores scored
-precision recall ranking rank ranked correct completion completions completed throughput
-duration seconds minute repeated repeat repetition variance confidence interval intervals
-percent percentage proportion ratio ratios number numbers total average mean median
-maximum minimum max min overall per separately respectively qualitative quantitative
-rather instead while when where whether because so yet further additional additional
-including include includes included exclude excludes excluded lack lacks lacking
-establish established assumption assumptions uncertain uncertainty possible potentially
-potential practical operational human automated automatic automation oversight intervention
-interventions behavior behaviors behavioral observable identical standard instruction
-following follow follows handle handles handling robustly recoverable failure latency
-retention forgetting retained retain relevant irrelevant retrieve retrieval retrieval
-finite infinite zero low high higher lower few many enough expected unexpected benign
-untrusted trusted trust external internal boundary boundaries isolation isolated isolate
-interrupt interrupted interruption cancel cancellation leakage privacy sensitive secure
-isolate execute instruction source sources textual text excerpt excerpts section sections
-figures equations tables appendices original novelty causal causal correlation causality
-correlated correlates criterion criteria hypothesis hypotheses falsify falsifiable verify
-prove proves proof limited empirical reported not independently verified qwen transformer
-implement implemented implementing implementation implementations harness stateless
-enable enabled enables enabling disable disabled disabling introduce introduces introduced
-scenario scenarios corpus contexts orchestrator orchestrators utility utilities event events
-highest lowest among fully locally live configuration configurations current strategy
-strategies similarity existing showing show shows capability capabilities involving
-setting settings effectiveness corresponding preloaded every propose proposing content
-network networks significantly alongside estimation achieve achieves achieved computational
-study studies directional return returns numerical gains operator operators integrated
-usage backed check checks build builds building blocked blocking insecure release releases
-direct directly guard guards allow allowed allowing decisions simplified version versions
-parameter parameters rewrite rewriting transform transformation representation representations
-access value values attribute attributes demonstrated denial favorable
-best worst designed depends dependent dependency dependencies based replacing
-replace replaced selective selectively selecting integrating integrate integrates
-maintain maintains maintained maintaining handle handled tested
-efficiently jointly threshold thresholds granular granularity partition partitioning partitioned
-explicit explicitly implicit implicitly subjective stable stability unstable instability
-preserve preserves preserving preservation heterogeneous homogeneous lightweight heavyweight
-temporal longitudinal formal informal operationalize operationalized formalize formalized
-constrained restrictive restriction restrict restricts restricting
-interleave interleaved interleaving trajectory trajectories tolerant tolerance fallback
-subtask subtasks specialized specialization specialist specialists generic specific specificity
-addition additionally optimizer optimizers online offline
-deployment deployed deploy deploying aligned align alignment externalize abstraction abstractions
-separate separated separates separating actionable identifying identify identified identities
-label labels labeled annotation annotations controller controllers reader readers replayable
-declarative imperative whereas which whose itself themselves together similar similarly unlike
-versus toward towards above below during until since either neither always never often
-sometimes generally particularly up aware reminder cloud device footprint terms
-conventional manual review scanners publicly fewer session sessions processing file
-conditional cascade gate invoke invokes necessary combine combines cumulative weighted
-technical generator indicators gain realized phase meta market trading
-transformers llm llms ai rag react python json api cpu gpu software engineering computer
-program programs code coding function functions function calling callable interface
-interfaces contract contracts output tool action environmental environment environments
-simulation simulated simulate simulator web browser browsing navigation navigation
-multimodal modality modalities visual vision image images detection classification
-classify classified reasoning chain thought thoughts branch branches branching graph
-graphs node nodes edge edges directed cycle cycles cyclic acyclic record records
-recorded replay replays replayed reproducible integrity audit auditing auditing
-paper papers algorithms algorithm eight six eleven strong commercial comprises
-interconnected phases broad competence development adapts evolve extent adaptation detailed
-applications beyond discussed improving given consistently outperform outperforms
-performs better non exposed vary varying interpreting real world
-interacts player players game deliberate fast speech client machine tight
-closely qualities valued actual play population rule out unmeasured
-near oracle selects estimator estimators operating regime scales wall clock nearly
-workers consider intra parallelism realization pre trained cognitive embed frequency
-employs bifurcated captures symbolic microstructure substantial profitability coupling
-cognition yields markets learn extends principles grounded top set assets represent
-enhance drawdown adapted decision making leveraging applied enhancing perception
-proposes oriented eviction driven page management retains peak tailored types
-produces cryptographically signed attestation attestations permissioned smart secured
-consortium operated certificate authority relative traditional scanning conducted
-art infer inferred interactions evaluates deny requires induce valid combination satisfies
-harder protecting completes failing leaving nothing mental health dialogue dialogues
-professionalism clinical authenticity constructed open working alliance technique
-encodes stage logic backbone fine tuned preference pairs goal bond derived anonymized
-counseling verbatim transcripts approximate reproduce therapist patient interaction
-sufficient modest modern curve likely corpora production harnesses judgment core host
-adapters declarations ledger consumable grants supporting grounds exercised monitored
-sanitized contain matching decomposition invariance arbitrary rewrites property
-slm stt tts nmse db snr mimo cnn cbt dpo asr ua times f1
-various deems evidenced conspiratorial discourse social media expressed lexical markers
-simply appending tweet tweets part nor necessarily desirable providing excessive noise harm
-we our post posts user inspect metadata circle utilize unique challenging covering
-published year span late early achieving chinese financial'''.split())
 
 
 class PublicError(ValueError):
@@ -190,53 +50,16 @@ def checked_id(value):
 def checked_title(value):
     if (not isinstance(value, str) or not 1 <= len(value) <= 400
             or value != ' '.join(value.split())
-            or any(not (c.isalnum() or c in " -:,.?!()'–—") for c in value)
-            or re.search(r'\w\.\w|(?:gh[pousr]_|sk-|AKIA|password|credential|secret)', value, re.I)):
+            or any(not (c.isalnum() or c in " -:,.?!()'’–—+%=αβγ") for c in value)
+            or prose(value) == OMITTED or '[redacted]' in prose(value)):
         raise PublicError('unsafe_public_title')
     return value
 
 
 def prose(value, quotations=(), public_words=frozenset()):
-    if value == OMITTED:
-        return OMITTED
-    if not isinstance(value, str) or not 1 <= len(value) <= 1000:
-        return OMITTED
-    # Only explicit research typography; never Unicode compatibility folding,
-    # URL decoding, arbitrary character deletion or unknown-word substitution.
-    value = value.translate(str.maketrans({'’': "'", '–': '-', '—': '-',
-                                          '%': ' percent', '×': ' times'}))
-    if (not re.fullmatch(r"[A-Za-z0-9 .,;:()'\-]+", value)
-            or re.search(r'[A-Za-z0-9]\.[A-Za-z]|[A-Za-z]\.[0-9]|\d+(?:\.\d+){2}'
-                         r'|\d{4}|(?:\d[ -]*){7}|\b(?:password|secret|credential|authorization|bearer|private|email|phone|address)\b'
-                         r"|\b(?:api|access|refresh|auth|session)(?:'s)?[^A-Za-z0-9]*(?:keys?|tokens?)\b"
-                         r"|\btokens?(?:'s)?\s*(?:-(?!budget\b)|[.:;,()']|is\b|equals\b|value\b)", value, re.I)):
-        return OMITTED
-    # Keep mixed lexemes intact. Only the literal research metric F1 is allowed;
-    # title words cannot bless mixed-alphanumeric credential-shaped strings.
-    lexemes = re.findall(r"[A-Za-z0-9]+(?:\.[0-9]+)?(?:'s)?", value.lower())
-    for word in lexemes:
-        word = word.removesuffix("'s")
-        if word == 'f1':
-            continue
-        if re.fullmatch(r'[0-9]{1,3}(?:\.[0-9]{1,3})?', word):
-            if float(word) <= 100:
-                continue
-        elif word.isalpha() and word in WORDS | public_words:
-            continue
-        return OMITTED
-    if not lexemes:
-        return OMITTED
-    words = re.findall(r'[a-z0-9]+', value.lower())
-    normalized = ' '.join(value.split())
-    spans = {tuple(words[i:i+8]) for i in range(len(words)-7)}
-    for quote in quotations:
-        if not isinstance(quote, str):
-            continue
-        q = re.findall(r'[a-z0-9]+', quote.lower())
-        # Do not emit a direct quote disguised as a model statement.
-        if words == q or any(tuple(q[j:j+8]) in spans for j in range(len(q)-7)):
-            return OMITTED
-    return normalized
+    # public_words is a compatibility argument, not an authorization mechanism.
+    from .research_privacy import sanitize
+    return sanitize(value, quotations)[0]
 
 
 def eligible(state):
@@ -253,16 +76,12 @@ def build_document(state, verified_titles):
         raise PublicError('research_not_complete')
     day = checked_day(state['day'])
     papers = []
-    public_words = frozenset(w.lower() for i in state['items']
-        for w in re.findall('[A-Za-z]+', checked_title(verified_titles.get(i['paper']['id'], ''))))
-    quotes = [v.get('quote', '') for item in state['items'] for key in KEYS
-              for v in item.get('analysis', {}).get(key, []) if isinstance(v, dict)]
     for item in state['items']:
         identity = checked_id(item['paper']['id'])
         if identity not in verified_titles:
             raise PublicError('public_metadata_unverified')
         papers.append({'id': identity, 'title': checked_title(verified_titles[identity]),
-                       'sections': {key: [prose(v.get('statement'), quotes, public_words)
+                       'sections': {key: [prose(v.get('statement'))
                             for v in item.get('analysis', {}).get(key, [])[:3]] for key in KEYS}})
     allowed = {p['id'] for p in papers}
     if len(allowed) != len(papers):
@@ -271,14 +90,17 @@ def build_document(state, verified_titles):
     for connection in state['synthesis'].get('connections', [])[:5]:
         refs = connection.get('papers', [])
         if isinstance(refs, list) and 1 <= len(refs) <= 5 and all(p in allowed for p in refs):
-            connections.append({'statement': prose(connection.get('statement'), quotes, public_words), 'papers': refs})
-    return {'schema': 1, 'day': day, 'papers': papers, 'connections': connections,
-            'proposal': prose(state['synthesis'].get('next_experiment'), quotes, public_words)}
+            connections.append({'statement': prose(connection.get('statement')), 'papers': refs})
+    return {'schema': 2, 'day': day, 'papers': papers, 'connections': connections,
+            'proposal': prose(state['synthesis'].get('next_experiment'))}
 
 
 def validate_document(doc):
+    if isinstance(doc, dict) and type(doc.get('schema')) is int and doc['schema'] == 1:
+        from .research_public_v1 import validate_document as legacy_validate
+        return legacy_validate(doc)
     if (not isinstance(doc, dict) or set(doc) != {'schema', 'day', 'papers', 'connections', 'proposal'}
-            or type(doc['schema']) is not int or doc['schema'] != 1):
+            or type(doc['schema']) is not int or doc['schema'] != 2):
         raise PublicError('invalid_public_document')
     checked_day(doc['day'])
     if not isinstance(doc['papers'], list) or not 1 <= len(doc['papers']) <= 10:
@@ -292,15 +114,14 @@ def validate_document(doc):
         if paper['id'] in ids or not isinstance(paper['sections'], dict) or set(paper['sections']) != set(KEYS):
             raise PublicError('invalid_public_document')
         ids.add(paper['id'])
-    public_words = frozenset(w.lower() for p in doc['papers'] for w in re.findall('[A-Za-z]+', p['title']))
     for paper in doc['papers']:
         for values in paper['sections'].values():
-            if not isinstance(values, list) or len(values) > 3 or any(prose(v, public_words=public_words) != v for v in values):
+            if not isinstance(values, list) or len(values) > 3 or any(prose(v) != v for v in values):
                 raise PublicError('unsafe_public_prose')
-    if not isinstance(doc['connections'], list) or len(doc['connections']) > 5 or prose(doc['proposal'], public_words=public_words) != doc['proposal']:
+    if not isinstance(doc['connections'], list) or len(doc['connections']) > 5 or prose(doc['proposal']) != doc['proposal']:
         raise PublicError('invalid_public_document')
     for item in doc['connections']:
-        if (not isinstance(item, dict) or set(item) != {'statement', 'papers'} or prose(item['statement'], public_words=public_words) != item['statement']
+        if (not isinstance(item, dict) or set(item) != {'statement', 'papers'} or prose(item['statement']) != item['statement']
                 or not isinstance(item['papers'], list) or not 1 <= len(item['papers']) <= 5
                 or any(not isinstance(p, str) or p not in ids for p in item['papers'])):
             raise PublicError('invalid_public_document')
@@ -325,24 +146,35 @@ def validate_document(doc):
 
 
 def render_document(doc):
+    if isinstance(doc, dict) and type(doc.get('schema')) is int and doc['schema'] == 1:
+        from .research_public_v1 import render_document as legacy_render
+        return legacy_render(doc)
     validate_document(doc)
     lines = ['# Agentic research — ' + doc['day'], '',
              'Model-generated interpretation and proposals; not independently verified.',
              'No experiments were executed. Read the original papers before acting.',
              'Titles and pinned identifiers were checked against arXiv metadata.',
              'Excerpts may omit figures, equations, tables and appendices. This is not a full-paper review.',
-             'Whole statements may be withheld. Quotation fields and private artifacts are not exported; short source phrases may recur.', '']
+             'Privacy checks mask identifiable private spans and omit ambiguous sensitive statements. Quotation fields and private artifacts are not exported; model summaries may repeat public source wording.', '']
     names = {'claims': 'Claims — model summary, not independent evidence', 'methods': 'Methods — model summary',
              'reported_evidence': 'Author-reported evidence — not replicated', 'limitations': 'Limitations — model interpretation',
              'experiments': 'Experiments — model proposals, not executed'}
     for p in doc['papers']:
         lines += ['## ' + p['title'], '', 'https://arxiv.org/abs/' + p['id'], '']
         for key in KEYS:
-            lines += ['### ' + names[key], ''] + ['- ' + s for s in p['sections'][key]] + ['']
-    lines += ['## Connections — model interpretation', '']
-    for c in doc['connections']:
+            values = [s for s in p['sections'][key] if s != OMITTED]
+            if values:
+                lines += ['### ' + names[key], ''] + ['- ' + s for s in values] + ['']
+    connections = [c for c in doc['connections'] if c['statement'] != OMITTED]
+    if connections:
+        lines += ['## Connections — model interpretation', '']
+    for c in connections:
         lines += ['- ' + c['statement'], '  ' + ' '.join('https://arxiv.org/abs/' + p for p in c['papers'])]
     lines += ['', '## Next experiment — model proposal, not executed', '', doc['proposal'], '']
+    omitted = sum(s == OMITTED for p in doc['papers'] for values in p['sections'].values() for s in values)
+    omitted += sum(c['statement'] == OMITTED for c in doc['connections'])
+    if omitted:
+        lines += [str(omitted) + ' statements omitted by privacy checks.', '']
     return '\n'.join(lines).encode('utf-8')
 
 
@@ -406,14 +238,26 @@ def _queue(db):
             status text not null, attempts integer not null default 0,
             last_attempt text not null default '', error text not null default '',
             phase text not null default 'prepare', commit_sha text not null default '')''')
+        db.execute('''create table if not exists public_revisions(
+            day text not null, revision integer not null, previous_sha256 text not null,
+            payload text not null, sha256 text not null, report_sha256 text not null,
+            source_sha256 text not null, created_at text not null, status text not null,
+            attempts integer not null default 0, error text not null default '',
+            commit_sha text not null default '', primary key(day,revision))''')
 
 
 def _statuses(db):
     if not db.execute("select 1 from sqlite_master where name='public_delivery'").fetchone():
         return []
     names = ('day', 'status', 'attempts', 'error', 'phase', 'commit_sha')
-    return [dict(zip(names, row)) for row in db.execute(
+    result = [dict(zip(names, row)) for row in db.execute(
         'select day,status,attempts,error,phase,commit_sha from public_delivery order by day')]
+    revisions = _revisions(db)
+    for item in result:
+        if any(r['day'] == item['day'] and r['status'] == 'delivered' for r in revisions):
+            item['status'] = 'superseded'
+    result += [{key: r[key] for key in ('day', 'revision', 'status', 'attempts', 'error', 'commit_sha')} for r in revisions]
+    return result
 
 
 def delivery_status(config):
@@ -425,15 +269,39 @@ def delivery_status(config):
         return _statuses(db)
 
 
+def _revisions(db):
+    if not db.execute("select 1 from sqlite_master where name='public_revisions'").fetchone():
+        return []
+    cursor = db.execute('select * from public_revisions order by day,revision')
+    names = [d[0] for d in cursor.description]
+    return [dict(zip(names, row)) for row in cursor]
+
+
 def _documents(db):
-    docs = {}
+    docs, hashes, numbers, pending = {}, {}, {}, set()
     for day, target, payload, sha in db.execute('select day,target,payload,sha256 from public_delivery where payload is not null'):
         if target != TARGET or hashlib.sha256(payload.encode()).hexdigest() != sha:
             raise PublicError('public_outbox_integrity_failed')
         doc = validate_document(json.loads(payload))
         if doc['day'] != checked_day(day):
             raise PublicError('public_outbox_integrity_failed')
-        docs[day] = doc
+        docs[day], hashes[day] = doc, sha
+    for row in _revisions(db):
+        day = row['day']
+        if (day not in docs or day in pending or row['revision'] != numbers.get(day, 0) + 1
+                or row['previous_sha256'] != hashes[day] or row['status'] not in ('pending', 'delivered')
+                or hashlib.sha256(row['payload'].encode()).hexdigest() != row['sha256']
+                or not re.fullmatch('[a-f0-9]{64}', row['source_sha256'])):
+            raise PublicError('public_revision_integrity_failed')
+        doc = validate_document(json.loads(row['payload']))
+        if (doc['schema'] != 2 or doc['day'] != day
+                or hashlib.sha256(render_document(doc)).hexdigest() != row['report_sha256']):
+            raise PublicError('public_revision_integrity_failed')
+        numbers[day], hashes[day] = row['revision'], row['sha256']
+        if row['status'] == 'delivered':
+            docs[day] = doc
+        else:
+            pending.add(day)
     return docs
 
 
@@ -457,7 +325,7 @@ async def sync(store, config, *, attempted=None, client=None, resolver=None):
             if eligible(state):
                 checked_day(state['day'])
                 db.execute("insert or ignore into public_delivery(day,target,status) values(?,?,'pending')", (state['day'], TARGET))
-    pending = db.execute("select day,payload from public_delivery where status='pending' order by last_attempt,day").fetchall()
+    pending = db.execute("select day,payload from public_delivery where status='pending' and day not in (select day from public_revisions) order by last_attempt,day").fetchall()
     for day, payload in pending:
         if day in attempted or len(attempted) >= 7:
             continue
@@ -491,6 +359,19 @@ async def sync(store, config, *, attempted=None, client=None, resolver=None):
     return _statuses(db)
 
 
+def retention(document):
+    """Count actual output fields, not guessed detector effectiveness."""
+    groups = {key: [s for p in document['papers'] for s in p['sections'][key]] for key in KEYS}
+    groups['connections'] = [c['statement'] for c in document['connections']]
+    groups['proposal'] = [document['proposal']]
+    def count(values):
+        return {'total': len(values), 'retained': sum(s != OMITTED and '[redacted]' not in s for s in values),
+                'redacted': sum(s != OMITTED and '[redacted]' in s for s in values),
+                'omitted': sum(s == OMITTED for s in values)}
+    return dict(count([s for values in groups.values() for s in values]),
+                by_section={key: count(values) for key, values in groups.items()})
+
+
 async def prepare(config, output, *, day=None, client=None, resolver=None):
     """Sanitized historical preview only: no Git, enqueue, state edits or uploads."""
     from contextlib import closing
@@ -505,7 +386,7 @@ async def prepare(config, output, *, day=None, client=None, resolver=None):
         raise PublicError('public_preview_must_be_empty')
     output.mkdir(mode=0o700, parents=True, exist_ok=True)
     path = Path(config.data_dir).absolute() / 'research.sqlite3'
-    states = []
+    states, prior = [], {}
     if path.exists():
         # A mode=ro WAL reader can still mutate the original SHM read marks.
         # Copy DB + WAL under the research lock, then query a private disposable
@@ -522,9 +403,11 @@ async def prepare(config, output, *, day=None, client=None, resolver=None):
             with closing(sqlite3.connect(copied)) as db:
                 sql = 'select payload from runs' + (' where day=?' if day else '') + ' order by day limit 3661'
                 states = [json.loads(row[0]) for row in db.execute(sql, (day,) if day else ())]
+                if db.execute("select 1 from sqlite_master where name='public_delivery'").fetchone():
+                    prior = _documents(db)
     if len(states) > 3660:
         raise PublicError('public_preview_limit')
-    result = {'prepared': [], 'ineligible': [], 'failed': [], 'uploaded': False}
+    result = {'prepared': [], 'ineligible': [], 'failed': [], 'uploaded': False, 'retention': {}}
     hashes = {}
     atomic(output / 'README.md', README)
     for state in states:
@@ -541,11 +424,96 @@ async def prepare(config, output, *, day=None, client=None, resolver=None):
             json_file(output / 'documents' / (identity + '.json'), document)
             atomic(output / 'reports' / (identity + '.md'), data)
             hashes[identity] = hashlib.sha256(data).hexdigest()
+            result['retention'][identity] = retention(document)
+            if identity in prior:
+                result['retention'][identity]['previous'] = retention(prior[identity])
             result['prepared'].append(identity)
         except Exception:
             result['failed'].append(identity)
+    lines = ['# Public preview retention', '', 'Counts describe actual retained fields, not a privacy guarantee.', '',
+             '| Date | Version | Fields | Retained | Redacted | Omitted |', '|---|---|---:|---:|---:|---:|']
+    for identity, counts in result['retention'].items():
+        for label, value in [('previous frozen', counts.get('previous')), ('preview', counts)]:
+            if value is not None:
+                lines.append('| %s | %s | %d | %d | %d | %d |' % (identity, label, value['total'],
+                    value['retained'], value['redacted'], value['omitted']))
+    atomic(output / 'RETENTION.md', '\n'.join(lines) + '\n')
     json_file(output / 'manifest.json', dict(result, report_sha256=hashes))
     return result
+
+
+async def revise(config, day, *, expected_payload, expected_report, client=None, resolver=None):
+    """Explicit, hash-approved correction. Never mutate an original delivery.
+
+    The approved report must be reproduced from completed trusted source state.
+    A new immutable payload/provenance row is frozen before Git. A retry reuses it.
+    Only this explicit command drains revisions; daily sync cannot enroll them.
+    """
+    checked_day(day)
+    if (not config.public_repository or not isinstance(expected_payload, str)
+            or not re.fullmatch('[a-f0-9]{64}', expected_payload)
+            or not isinstance(expected_report, str) or not re.fullmatch('[a-f0-9]{64}', expected_report)):
+        raise PublicError('invalid_public_revision_approval')
+    validate_config(config)
+    from .research import Store, locked, stamp, encode, verify_completed
+    from .research_public_git import GitPublisher
+    with locked(config.data_dir) as root:
+        store = Store(root)
+        try:
+            db = store.db
+            _queue(db)
+            documents = _documents(db)  # Validate the entire immutable chain first.
+            base = db.execute('select payload,sha256 from public_delivery where day=?', (day,)).fetchone()
+            if base is None or base[0] is None:
+                raise PublicError('public_revision_requires_frozen_original')
+            rows = [r for r in _revisions(db) if r['day'] == day]
+            row = next((r for r in rows if r['previous_sha256'] == expected_payload
+                        and r['report_sha256'] == expected_report), None)
+            history = {base[1]: base[0], **{r['sha256']: r['payload'] for r in rows}}
+            if row is None:
+                if (rows and rows[-1]['status'] == 'pending') or expected_payload != (rows[-1]['sha256'] if rows else base[1]):
+                    raise PublicError('public_revision_stale_approval')
+                state = store.load(day)
+                if not eligible(state):
+                    raise PublicError('research_not_complete')
+                verify_completed(state)
+                titles = await verify_metadata([i['paper']['id'] for i in state['items']], client=client, resolver=resolver)
+                document = build_document(state, titles)
+                if hashlib.sha256(render_document(document)).hexdigest() != expected_report:
+                    raise PublicError('public_revision_preview_changed')
+                payload = json.dumps(document, ensure_ascii=True, sort_keys=True, separators=(',', ':'))
+                digest = hashlib.sha256(payload.encode()).hexdigest()
+                if digest == expected_payload:
+                    raise PublicError('public_revision_unchanged')
+                row = dict(day=day, revision=len(rows)+1, previous_sha256=expected_payload,
+                           payload=payload, sha256=digest, report_sha256=expected_report,
+                           source_sha256=hashlib.sha256(encode(state).encode()).hexdigest(),
+                           created_at=stamp(), status='pending')
+                with db:
+                    db.execute("""insert into public_revisions(day,revision,previous_sha256,payload,sha256,
+                        report_sha256,source_sha256,created_at,status) values(:day,:revision,:previous_sha256,
+                        :payload,:sha256,:report_sha256,:source_sha256,:created_at,:status)""", row)
+            elif row != rows[-1]:
+                raise PublicError('public_revision_superseded')
+            document = json.loads(row['payload'])
+            previous = json.loads(history[expected_payload])
+            documents[day] = document
+            with db:
+                db.execute('update public_revisions set attempts=attempts+1 where day=? and revision=?', (day, row['revision']))
+            try:
+                commit = await asyncio.to_thread(GitPublisher(config.public_staging_dir, config.public_repository).publish,
+                                                 day, documents, previous=previous)
+            except Exception:
+                with db:
+                    db.execute("update public_revisions set error='public_revision_failed' where day=? and revision=?", (day, row['revision']))
+                raise PublicError('public_revision_failed') from None
+            with db:
+                db.execute("update public_revisions set status='delivered',commit_sha=?,error='' where day=? and revision=?",
+                           (commit, day, row['revision']))
+            return dict(day=day, revision=row['revision'], status='delivered', commit_sha=commit,
+                        sha256=row['sha256'], report_sha256=row['report_sha256'])
+        finally:
+            store.db.close()
 
 
 async def retry(config):

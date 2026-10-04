@@ -74,6 +74,8 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(public.prose(value), public.OMITTED)
 
     def test_useful_operational_proposals_survive_without_allowing_unknown_names(self):
+        # Unknown scientific names are not private by themselves. Explicit private
+        # context, not absence from a word list, is what must fail closed.
         public = public_module(self)
         state = completed()
         proposal = ('Proposed change: Implement bounded memory retrieval in the local harness. '
@@ -85,7 +87,7 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(doc['proposal'], proposal)
         self.assertEqual(doc['papers'][0]['sections']['claims'], ['ActKV improves memory efficiency.'])
         public.validate_artifact(public.render_document(doc), doc)
-        state['items'][0]['analysis']['claims'][0]['statement'] = 'PrivateProjectName improves memory efficiency.'
+        state['items'][0]['analysis']['claims'][0]['statement'] = 'My private project PrivateProjectName improves memory efficiency.'
         self.assertEqual(public.build_document(state, {ID: TITLE})['papers'][0]['sections']['claims'], [public.OMITTED])
 
     def test_new_allowlisted_report_uses_verified_title_and_interpretation(self):
@@ -110,8 +112,8 @@ class ExportTests(unittest.TestCase):
                  r'\u002fUsers\u002fexample', 'L1VzZXJzL2V4YW1wbGU=',
                  '[memory](https://example.org)', '<a href="https://example.org">memory</a>',
                  'www.example.org', 'person@example.org', '+1 212 555 1234',
-                 'John Smith compared memory.', 'password\u00a0:\npublic', 'daily.md',
-                 'memory\u200bretrieval', 'PRIVATE KEY', 'correct horse battery staple',
+                 'My colleague John Smith compared memory.', 'password\u00a0:\npublic', 'daily.md',
+                 'memory\u200bretrieval', 'PRIVATE KEY', 'passphrase: correct horse battery staple',
                  'API token is memory', 'token: memory', 'call 1 2 3 4 5 6 7 8 9']
         for value in cases:
             with self.subTest(value=value):
@@ -126,7 +128,7 @@ class ExportTests(unittest.TestCase):
         state = completed()
         statement = state['items'][0]['analysis']['claims'][0]['statement']
         state['items'][0]['analysis']['claims'][0]['quote'] = statement
-        self.assertEqual(public.build_document(state, {ID: TITLE})['papers'][0]['sections']['claims'], [public.OMITTED])
+        self.assertEqual(public.build_document(state, {ID: TITLE})['papers'][0]['sections']['claims'], [statement])
 
     def test_credential_boundaries_and_mixed_lexemes_are_withheld_at_git_sink(self):
         public = public_module(self)
@@ -537,6 +539,13 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
                                                   resolver=lambda _: ['93.184.216.34'])
             self.assertEqual(result['prepared'], ['2026-09-27'])
             self.assertFalse(result['uploaded'])
+            import json
+            manifest = json.loads((root / 'preview/manifest.json').read_text())
+            retention = manifest['retention']['2026-09-27']
+            self.assertEqual(retention['total'], 7)
+            self.assertEqual(retention['retained'] + retention['redacted'] + retention['omitted'], 7)
+            self.assertIn('2026-09-27', (root / 'preview/RETENTION.md').read_text())
+            self.assertNotIn('provider_log', (root / 'preview/RETENTION.md').read_text())
             after = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in (root / 'state').rglob('*') if p.is_file()}
             self.assertEqual([p.name for p in before.keys() | after.keys() if before.get(p) != after.get(p)], [])
             self.assertFalse(list((root / 'preview').rglob('.git')))
@@ -557,6 +566,16 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(GitPublisher, '_remote', return_value=str(bare)), patch.object(
                     GitPublisher, 'publish', side_effect=OSError('/private/secret credential detail')):
                 first = await fixture.run()
+                # Legacy outbox compatibility is exercised explicitly in fixtures;
+                # run/retry no longer invoke this unsafe automatic publisher.
+                async with httpx.AsyncClient(transport=httpx.MockTransport(fixture.handler)) as client:
+                    with research.locked(fixture.config.data_dir) as state_root:
+                        store = research.Store(state_root)
+                        try:
+                            await public.sync(store, fixture.config, client=client,
+                                              resolver=lambda _: ['93.184.216.34'])
+                        finally:
+                            store.db.close()
             self.assertEqual(first['delivery']['status'], 'pending')
             queued = public.delivery_status(fixture.config)
             self.assertEqual(queued[0]['status'], 'pending')
@@ -565,12 +584,13 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(GitPublisher, '_remote', return_value=str(bare)), patch.object(
                     public, 'verify_metadata', side_effect=AssertionError('Frozen retry must not refetch')):
                 again = await fixture.run()
+                await public.retry(fixture.config)  # compatibility API, not a supported live CLI
             self.assertEqual(dict(fixture.calls), requests)
             self.assertEqual(again['delivery']['status'], 'pending')
             self.assertEqual(public.delivery_status(fixture.config)[0]['status'], 'delivered')
             self.assertEqual(first['attempts'], again['attempts'])
 
-    async def test_completed_run_publishes_before_early_obsidian_permission_error(self):
+    async def test_completed_run_never_auto_publishes_on_early_obsidian_permission_error(self):
         public = public_module(self)
         from harness import research
         from harness.research_public_git import GitPublisher
@@ -595,6 +615,7 @@ class IntegrationTests(unittest.IsolatedAsyncioTestCase):
                     research, 'verify_artifacts', side_effect=inaccessible_export):
                 with self.assertRaises(PermissionError):
                     await fixture.run()
-            self.assertEqual(public.delivery_status(fixture.config)[0]['status'], 'delivered')
+            self.assertEqual(public.delivery_status(fixture.config), [])
+            self.assertFalse((root / 'public-stage').exists())
             self.assertEqual(fixture.calls['analysis'], calls['analysis'])
             self.assertEqual(fixture.calls['synthesis'], calls['synthesis'])

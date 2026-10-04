@@ -478,9 +478,9 @@ async def run(config, *, day=None, retry=False, web_client=None, model_client=No
                 state = store.load(day)
                 if state and state['config_sha256'] != signature:
                     raise ValueError('Configuration changed for existing day; use its original config or a separate state directory')
-                public_attempted = set()
-                public_deliveries = await research_public.sync(store, config, attempted=public_attempted,
-                                                               client=web, resolver=resolver)
+                # Publication is a separate exact-byte independent-review command.
+                # Legacy opt-in fields cannot reactivate heuristic auto-publishing.
+                public_deliveries = []
                 if state:
                     # Preflight before any network/model work or checkpoint writes.
                     verify_completed(state)
@@ -592,10 +592,8 @@ async def run(config, *, day=None, retry=False, web_client=None, model_client=No
                     if config.obsidian_dir:
                         state['delivery'] = dict(state.get('delivery', {}), status='pending')
                     store.save(state)
-                    # Public delivery must run before any vault access, including
-                    # an export error. Its outbox never consumes daily.md.
-                    public_deliveries = await research_public.sync(store, config, attempted=public_attempted,
-                                                                   client=web, resolver=resolver)
+                    # The independent reviewer publishes separately from research
+                    # and Obsidian delivery; never export model prose automatically.
                     if config.obsidian_dir:
                         deliver(store, state)
                 return dict(state, public_deliveries=public_deliveries)
@@ -671,7 +669,11 @@ def main():
         sub = commands.add_parser(name)
         sub.add_argument('--date', help='ISO local calendar day; default today (status lists recent runs)')
     commands.add_parser('public-status', help='Read public outbox status only')
-    commands.add_parser('public-retry', help='Publish completed research only; requires explicit public opt-in')
+    commands.add_parser('public-retry', help='Disabled legacy publisher; use harness.research_reviewed')
+    sub = commands.add_parser('public-revise', help='Disabled legacy correction; use harness.research_reviewed')
+    sub.add_argument('--date', required=True)
+    sub.add_argument('--expected-payload-sha256', required=True)
+    sub.add_argument('--expected-report-sha256', required=True)
     sub = commands.add_parser('public-prepare', help='Build private sanitized previews; never publish or enqueue')
     sub.add_argument('--output', required=True, type=Path)
     sub.add_argument('--date', help='Optional ISO date; otherwise all historical eligible runs')
@@ -686,8 +688,8 @@ def main():
             result = research_public.delivery_status(config)
         elif args.command == 'public-prepare':
             result = asyncio.run(research_public.prepare(config, args.output, day=args.date))
-        elif args.command == 'public-retry':
-            result = asyncio.run(research_public.retry(config))
+        elif args.command in ('public-revise', 'public-retry'):
+            raise research_public.PublicError('legacy_publication_disabled_use_reviewed_command')
         elif args.command == 'status':
             result = status(config, args.date)
         elif args.command == 'search':
